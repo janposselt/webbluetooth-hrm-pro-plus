@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Heart Rate</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <h2>Live Heart Rate Dashboard</h2>
+    <button onclick="connectToHeartRateMonitor()">Connect</button>
+    <p id="heartRateDisplay">Heart Rate: -- BPM</p>
+    <p id="batteryDisplay">Battery: --%</p>
+    <canvas id="heartRateChart"></canvas>
+
+    <script>
+        let chart;
+        let heartRateData = [];
+        let timeLabels = [];
+
+        async function getBatteryLevel(server) {
+            try {
+                const service = await server.getPrimaryService('battery_service');
+                const characteristic = await service.getCharacteristic('battery_level');
+                const value = await characteristic.readValue();
+                const batteryLevel = value.getUint8(0);
+                document.getElementById('batteryDisplay').innerText = `Battery: ${batteryLevel}%`;
+            } catch (error) {
+                console.error("Error reading battery:", error);
+            }
+        }
+
+        async function connectToHeartRateMonitor() {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: ['heart_rate'] }],
+                    optionalServices: ['battery_service']
+                });
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('heart_rate');
+                const characteristic = await service.getCharacteristic('heart_rate_measurement');
+
+                characteristic.addEventListener('characteristicvaluechanged', handleHeartRateMeasurement);
+                await characteristic.startNotifications();
+                getBatteryLevel(server);
+            } catch (error) {
+                console.error("Connection error:", error);
+            }
+        }
+
+        function handleHeartRateMeasurement(event) {
+            const value = event.target.value;
+            const heartRate = parseHeartRate(value);
+            document.getElementById('heartRateDisplay').innerText = `Heart Rate: ${heartRate} BPM`;
+
+            const now = new Date().toLocaleTimeString();
+            heartRateData.push(heartRate);
+            timeLabels.push(now);
+
+            if (heartRateData.length > 20) {
+                heartRateData.shift();
+                timeLabels.shift();
+            }
+
+            chart.update();
+        }
+
+        function parseHeartRate(value) {
+            let data = new DataView(value.buffer);
+            let flags = data.getUint8(0);
+            let rate16Bits = flags & 0x1;
+            return rate16Bits ? data.getUint16(1, true) : data.getUint8(1);
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            let ctx = document.getElementById('heartRateChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [{
+                        label: 'Heart Rate (BPM)',
+                        data: heartRateData,
+                        borderColor: 'red',
+                        backgroundColor: 'rgba(255, 0, 0, 0.2)',
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Time' } },
+                        y: { title: { display: true, text: 'BPM' }, min: 40, max: 200 }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

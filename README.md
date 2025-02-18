@@ -13,6 +13,7 @@ This example project provides a live heart rate monitoring dashboard using Bluet
 
 - A web browser that supports the Web Bluetooth API (e.g., Google Chrome).
 - A compatible heart rate monitor that supports Bluetooth Low Energy (BLE) and the Heart Rate service.
+  - Tested with Garmin HRM-Pro Plus (the one with the white bezel)
   
 ## How to Use
 
